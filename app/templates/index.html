@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DataM - Dashboard Contable</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <main class="container">
+      <section id="authCard" class="card auth-card">
+        <h1>DataM Contabilidad</h1>
+        <p>Inicia sesión para analizar tus flujos en tiempo real.</p>
+        <form id="loginForm">
+          <input name="username" type="text" placeholder="Usuario" required />
+          <input name="password" type="password" placeholder="Contraseña" required minlength="10" />
+          <button type="submit">Ingresar</button>
+        </form>
+        <form id="registerForm" class="secondary">
+          <input name="full_name" type="text" placeholder="Nombre completo" required />
+          <input name="username" type="text" placeholder="Nuevo usuario" required />
+          <input name="password" type="password" placeholder="Nueva contraseña" required minlength="10" />
+          <button type="submit">Crear usuario</button>
+        </form>
+        <small id="authMessage"></small>
+      </section>
+
+      <section id="dashboard" class="hidden">
+        <header class="top-bar">
+          <div>
+            <h2>Dashboard Contable Dinámico</h2>
+            <p id="welcome"></p>
+          </div>
+          <button id="logoutBtn" class="ghost">Cerrar sesión</button>
+        </header>
+
+        <article class="card">
+          <h3>Cargar archivo Excel</h3>
+          <p>Formato requerido: fecha, categoria, subcategoria, descripcion, tipo(ingreso/egreso), monto.</p>
+          <form id="uploadForm">
+            <input type="file" name="file" accept=".xlsx,.xls" required />
+            <button type="submit">Subir</button>
+          </form>
+          <small id="uploadMessage"></small>
+        </article>
+
+        <article class="card filters">
+          <h3>Filtros</h3>
+          <input type="text" id="search" placeholder="Buscar descripción" />
+          <input type="text" id="category" placeholder="Categoría exacta" />
+          <select id="flowType">
+            <option value="">Todos</option>
+            <option value="ingreso">Ingreso</option>
+            <option value="egreso">Egreso</option>
+          </select>
+          <input type="date" id="dateFrom" />
+          <input type="date" id="dateTo" />
+          <button id="applyFilters">Aplicar filtros</button>
+        </article>
+
+        <article class="grid">
+          <section class="card"><canvas id="categoryChart"></canvas></section>
+          <section class="card"><canvas id="flowChart"></canvas></section>
+          <section class="card full"><canvas id="monthChart"></canvas></section>
+        </article>
+
+        <article class="card">
+          <h3>Registros</h3>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th><th>Categoría</th><th>Subcategoría</th><th>Descripción</th><th>Tipo</th><th>Monto</th>
+                </tr>
+              </thead>
+              <tbody id="recordsBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
