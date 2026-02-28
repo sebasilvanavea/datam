@@ -28,6 +28,14 @@ def test_auth_and_data_flow():
                 "descripcion": "Factura A",
                 "tipo": "ingreso",
                 "monto": 1500,
+            },
+            {
+                "fecha": "2025-01-02",
+                "categoria": "Servicios",
+                "subcategoria": "Consultoría",
+                "descripcion": "Pago proveedor",
+                "tipo": "egreso",
+                "monto": 500,
             }
         ]
     )
@@ -44,3 +52,8 @@ def test_auth_and_data_flow():
     records = client.get("/api/data/records")
     assert records.status_code == 200
     assert isinstance(records.json(), list)
+
+    filtered_summary = client.get("/api/data/summary", params={"flow_type": "ingreso"})
+    assert filtered_summary.status_code == 200
+    payload = filtered_summary.json()
+    assert all(item["label"] == "ingreso" for item in payload["by_flow"])
