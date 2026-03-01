@@ -209,6 +209,7 @@ function App() {
 
   const [theme, setTheme] = useState('dark')
   const [user, setUser] = useState(null)
+  const [sessionChecking, setSessionChecking] = useState(true)
   const [authMessage, setAuthMessage] = useState('')
   const [companyMessage, setCompanyMessage] = useState('')
   const [uploadMessage, setUploadMessage] = useState('')
@@ -550,6 +551,7 @@ function App() {
     try {
       const me = await api('/api/me')
       setUser(me)
+      setActiveTab('home')
       const companyList = await refreshCompanies()
       const selectedCompanyId = companyList.length === 1 ? String(companyList[0].id) : ''
       setActiveCompanyId(selectedCompanyId)
@@ -564,6 +566,8 @@ function App() {
       }
     } catch {
       setUser(null)
+    } finally {
+      setSessionChecking(false)
     }
   }
 
@@ -639,6 +643,7 @@ function App() {
 
       const me = await api('/api/me')
       setUser(me)
+      setActiveTab('home')
       const companyList = await refreshCompanies()
       const selectedCompanyId = companyList.length === 1 ? String(companyList[0].id) : ''
       setActiveCompanyId(selectedCompanyId)
@@ -661,6 +666,7 @@ function App() {
   async function handleLogout() {
     await fetch(withApiBase('/api/auth/logout'), { credentials: 'include', ...withCsrfHeaders({ method: 'POST' }) })
     setUser(null)
+    setActiveTab('home')
     setActiveCompanyId('')
     setActiveVaultId('')
     setVaults([])
@@ -1135,6 +1141,14 @@ function App() {
       setUploadMessage(error instanceof Error ? error.message : 'No se pudo generar el PDF')
       setUploadMessageType('error')
     }
+  }
+
+  if (sessionChecking) {
+    return (
+      <div className={`flex min-h-screen items-center justify-center ${isDark ? 'bg-slate-950 text-slate-200' : 'bg-slate-100 text-slate-700'}`}>
+        <div className="text-sm">Cargando sesión...</div>
+      </div>
+    )
   }
 
   if (!user) {
