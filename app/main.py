@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, create_engine, delete, func, select, text
+from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, create_engine, delete, extract, func, select, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship, sessionmaker
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
@@ -339,10 +339,11 @@ def apply_record_filters(
     if project_code:
         query = query.where(AccountingRecord.project_code == project_code)
     if year:
-        query = query.where(func.strftime("%Y", AccountingRecord.date) == str(year))
+        year_value = int(year)
+        query = query.where(extract("year", AccountingRecord.date) == year_value)
     if month_number:
-        month = str(month_number).zfill(2)
-        query = query.where(func.strftime("%m", AccountingRecord.date) == month)
+        month_value = int(month_number)
+        query = query.where(extract("month", AccountingRecord.date) == month_value)
     if flow_type:
         query = query.where(AccountingRecord.flow_type == flow_type)
     if date_from:
@@ -1250,14 +1251,14 @@ def summary(
     by_category = db.execute(category_query).all()
 
     month_query = apply_record_filters(
-        select(func.strftime("%Y-%m", AccountingRecord.date), func.sum(AccountingRecord.amount))
+        select(AccountingRecord.month, func.sum(AccountingRecord.amount))
         .where(
             AccountingRecord.owner_id == user.id,
             AccountingRecord.company_id == company.id,
             AccountingRecord.vault_id == vault.id,
         )
-        .group_by(func.strftime("%Y-%m", AccountingRecord.date))
-        .order_by(func.strftime("%Y-%m", AccountingRecord.date)),
+        .group_by(AccountingRecord.month)
+        .order_by(AccountingRecord.month),
         category,
         subcategory,
         project,
@@ -1419,16 +1420,16 @@ def years(
     company = resolve_company(user, db, company_id)
     vault = resolve_vault(user, db, company, vault_id)
     result = db.execute(
-        select(func.strftime("%Y", AccountingRecord.date))
+        select(extract("year", AccountingRecord.date))
         .where(
             AccountingRecord.owner_id == user.id,
             AccountingRecord.company_id == company.id,
             AccountingRecord.vault_id == vault.id,
         )
-        .group_by(func.strftime("%Y", AccountingRecord.date))
-        .order_by(func.strftime("%Y", AccountingRecord.date).desc())
+        .group_by(extract("year", AccountingRecord.date))
+        .order_by(extract("year", AccountingRecord.date).desc())
     ).all()
-    return [row[0] for row in result if row[0]]
+    return [str(int(row[0])) for row in result if row[0] is not None]
 
 
 @app.get("/api/data/report")
