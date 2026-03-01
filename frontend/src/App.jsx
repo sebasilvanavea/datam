@@ -52,7 +52,7 @@ function getCookieValue(name) {
   return ''
 }
 
-async function api(path, options = {}, retry = true) {
+function withCsrfHeaders(options = {}) {
   const method = (options.method || 'GET').toUpperCase()
   const headers = new Headers(options.headers || {})
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
@@ -61,8 +61,12 @@ async function api(path, options = {}, retry = true) {
       headers.set('x-csrf-token', csrfToken)
     }
   }
+  return { ...options, headers }
+}
 
-  const response = await fetch(withApiBase(path), { credentials: 'include', ...options, headers })
+async function api(path, options = {}, retry = true) {
+  const requestOptions = withCsrfHeaders(options)
+  const response = await fetch(withApiBase(path), { credentials: 'include', ...requestOptions })
 
   if (response.status === 401 && retry) {
     const refresh = await fetch(withApiBase('/api/auth/refresh'), { method: 'POST', credentials: 'include' })
@@ -444,7 +448,10 @@ function App() {
       formData.append('tax_id', companyForm.tax_id)
       formData.append('business_line', companyForm.business_line)
 
-      const response = await fetch(withApiBase('/api/companies'), { method: 'POST', body: formData, credentials: 'include' })
+      const response = await fetch(
+        withApiBase('/api/companies'),
+        { credentials: 'include', ...withCsrfHeaders({ method: 'POST', body: formData }) },
+      )
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'No se pudo crear la compañía')
 
@@ -475,7 +482,10 @@ function App() {
       formData.append('name', vaultForm.name)
       formData.append('period_type', vaultForm.period_type)
 
-      const response = await fetch(withApiBase(appendCompany('/api/vaults', activeCompanyId, '', false)), { method: 'POST', body: formData, credentials: 'include' })
+      const response = await fetch(
+        withApiBase(appendCompany('/api/vaults', activeCompanyId, '', false)),
+        { credentials: 'include', ...withCsrfHeaders({ method: 'POST', body: formData }) },
+      )
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'No se pudo crear el vault')
 
@@ -594,7 +604,10 @@ function App() {
       formData.append('username', registerForm.username)
       formData.append('password', registerForm.password)
 
-      const response = await fetch(withApiBase('/api/auth/register'), { method: 'POST', body: formData, credentials: 'include' })
+      const response = await fetch(
+        withApiBase('/api/auth/register'),
+        { credentials: 'include', ...withCsrfHeaders({ method: 'POST', body: formData }) },
+      )
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'No se pudo registrar')
 
@@ -617,7 +630,10 @@ function App() {
       formData.append('username', loginForm.username)
       formData.append('password', loginForm.password)
 
-      const response = await fetch(withApiBase('/api/auth/login'), { method: 'POST', body: formData, credentials: 'include' })
+      const response = await fetch(
+        withApiBase('/api/auth/login'),
+        { credentials: 'include', ...withCsrfHeaders({ method: 'POST', body: formData }) },
+      )
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'No autenticado')
 
@@ -643,7 +659,7 @@ function App() {
   }
 
   async function handleLogout() {
-    await fetch(withApiBase('/api/auth/logout'), { method: 'POST', credentials: 'include' })
+    await fetch(withApiBase('/api/auth/logout'), { credentials: 'include', ...withCsrfHeaders({ method: 'POST' }) })
     setUser(null)
     setActiveCompanyId('')
     setActiveVaultId('')
@@ -710,7 +726,10 @@ function App() {
       const formData = new FormData()
       formData.append('file', file)
 
-      let response = await fetch(withApiBase(appendCompany('/api/data/upload?enforce_period_check=true')), { method: 'POST', body: formData, credentials: 'include' })
+      let response = await fetch(
+        withApiBase(appendCompany('/api/data/upload?enforce_period_check=true')),
+        { credentials: 'include', ...withCsrfHeaders({ method: 'POST', body: formData }) },
+      )
       let payload = await response.json()
 
       if (response.status === 409) {
@@ -718,7 +737,10 @@ function App() {
         if (!confirmed) {
           throw new Error('Carga cancelada por el usuario')
         }
-        response = await fetch(withApiBase(appendCompany('/api/data/upload?enforce_period_check=true&allow_period_update=true')), { method: 'POST', body: formData, credentials: 'include' })
+        response = await fetch(
+          withApiBase(appendCompany('/api/data/upload?enforce_period_check=true&allow_period_update=true')),
+          { credentials: 'include', ...withCsrfHeaders({ method: 'POST', body: formData }) },
+        )
         payload = await response.json()
       }
 
@@ -774,7 +796,10 @@ function App() {
 
     try {
       const query = buildQuery(filters)
-      const response = await fetch(withApiBase(`/api/data/clear?${query}`), { method: 'DELETE', credentials: 'include' })
+      const response = await fetch(
+        withApiBase(`/api/data/clear?${query}`),
+        { credentials: 'include', ...withCsrfHeaders({ method: 'DELETE' }) },
+      )
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'No se pudo limpiar los datos')
 
