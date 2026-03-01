@@ -13,10 +13,8 @@ from uuid import uuid4
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, create_engine, delete, extract, func, select, text
@@ -166,15 +164,6 @@ ensure_schema_evolution()
 
 
 app = FastAPI(title="Contabilidad Dinámica", lifespan=lifespan)
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
-
-frontend_dist = Path("frontend/dist")
-frontend_assets = frontend_dist / "assets"
-frontend_index = frontend_dist / "index.html"
-
-if frontend_assets.exists():
-    app.mount("/assets", StaticFiles(directory=str(frontend_assets)), name="frontend-assets")
 
 app.add_middleware(
     CORSMiddleware,
@@ -502,11 +491,9 @@ def clear_auth_cookies(response: JSONResponse) -> None:
     response.delete_cookie("refresh_token")
 
 
-@app.get("/", response_class=HTMLResponse)
-def root(request: Request):
-    if frontend_index.exists():
-        return FileResponse(frontend_index)
-    return templates.TemplateResponse("index.html", {"request": request})
+@app.get("/")
+def root():
+    return {"status": "ok", "service": "datam-backend"}
 
 
 @app.post("/api/auth/register")
