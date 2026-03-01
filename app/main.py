@@ -201,9 +201,12 @@ async def set_security_headers(request: Request, call_next):
         if request.url.path not in CSRF_EXEMPT_PATHS:
             csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
             csrf_header = request.headers.get(CSRF_HEADER_NAME)
-            if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+            origin = request.headers.get("origin", "")
+            origin_allowed = bool(origin and origin in CORS_ALLOW_ORIGINS)
+            csrf_valid = bool(csrf_cookie and csrf_header and secrets.compare_digest(csrf_cookie, csrf_header))
+            if not csrf_valid and not origin_allowed:
                 return add_cors_headers(
-                    JSONResponse(status_code=403, content={"detail": "CSRF token inválido"}),
+                    JSONResponse(status_code=403, content={"detail": "CSRF/Origin inválido"}),
                     request,
                 )
 
