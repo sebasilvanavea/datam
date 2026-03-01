@@ -146,7 +146,7 @@ class AccountingRecord(Base):
     upload_batch: Mapped[Optional[UploadBatch]] = relationship(back_populates="records")
 
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {})
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 
@@ -160,84 +160,6 @@ async def lifespan(_: FastAPI):
 
 def ensure_schema_evolution() -> None:
     Base.metadata.create_all(bind=engine)
-    if not DATABASE_URL.startswith("sqlite"):
-        return
-    with engine.begin() as connection:
-        columns = connection.execute(text("PRAGMA table_info(accounting_records)")).fetchall()
-        column_names = {row[1] for row in columns}
-        if "project" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN project VARCHAR(120) DEFAULT 'Sin proyecto'"))
-            connection.execute(text("UPDATE accounting_records SET project = 'Sin proyecto' WHERE project IS NULL OR TRIM(project) = ''"))
-        if "month" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN month VARCHAR(20) DEFAULT ''"))
-        if "account" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN account VARCHAR(120) DEFAULT 'General'"))
-        if "project_code" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN project_code VARCHAR(80) DEFAULT ''"))
-        if "counterparty" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN counterparty VARCHAR(160) DEFAULT ''"))
-        if "document_type" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN document_type VARCHAR(80) DEFAULT ''"))
-        if "document_number" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN document_number VARCHAR(80) DEFAULT ''"))
-        if "verified" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN verified VARCHAR(40) DEFAULT ''"))
-        if "comments" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN comments VARCHAR(255) DEFAULT ''"))
-        if "balance" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN balance FLOAT DEFAULT 0"))
-        if "upload_batch_id" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN upload_batch_id INTEGER"))
-        if "source_filename" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN source_filename VARCHAR(255) DEFAULT ''"))
-        if "company_id" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN company_id INTEGER"))
-        if "vault_id" not in column_names:
-            connection.execute(text("ALTER TABLE accounting_records ADD COLUMN vault_id INTEGER"))
-
-        upload_columns = connection.execute(text("PRAGMA table_info(upload_batches)")).fetchall()
-        upload_column_names = {row[1] for row in upload_columns}
-        if "company_id" not in upload_column_names:
-            connection.execute(text("ALTER TABLE upload_batches ADD COLUMN company_id INTEGER"))
-        if "vault_id" not in upload_column_names:
-            connection.execute(text("ALTER TABLE upload_batches ADD COLUMN vault_id INTEGER"))
-
-    with SessionLocal() as db:
-        users = db.scalars(select(User)).all()
-        for user in users:
-            company = db.scalar(select(Company).where(Company.owner_id == user.id).order_by(Company.id.asc()))
-            if not company:
-                company = Company(owner_id=user.id, name="Empresa principal")
-                db.add(company)
-                db.flush()
-
-            default_vault = db.scalar(
-                select(Vault)
-                .where(Vault.owner_id == user.id, Vault.company_id == company.id)
-                .order_by(Vault.id.asc())
-            )
-            if not default_vault:
-                default_vault = Vault(owner_id=user.id, company_id=company.id, name="General", period_type="custom")
-                db.add(default_vault)
-                db.flush()
-
-            db.execute(
-                text("UPDATE accounting_records SET company_id = :company_id WHERE owner_id = :owner_id AND company_id IS NULL"),
-                {"company_id": company.id, "owner_id": user.id},
-            )
-            db.execute(
-                text("UPDATE upload_batches SET company_id = :company_id WHERE owner_id = :owner_id AND company_id IS NULL"),
-                {"company_id": company.id, "owner_id": user.id},
-            )
-            db.execute(
-                text("UPDATE accounting_records SET vault_id = :vault_id WHERE owner_id = :owner_id AND company_id = :company_id AND vault_id IS NULL"),
-                {"vault_id": default_vault.id, "owner_id": user.id, "company_id": company.id},
-            )
-            db.execute(
-                text("UPDATE upload_batches SET vault_id = :vault_id WHERE owner_id = :owner_id AND company_id = :company_id AND vault_id IS NULL"),
-                {"vault_id": default_vault.id, "owner_id": user.id, "company_id": company.id},
-            )
-        db.commit()
 
 
 ensure_schema_evolution()

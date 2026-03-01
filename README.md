@@ -57,31 +57,20 @@ Abrir: `http://127.0.0.1:8000`
 JWT_SECRET=una_clave_larga_y_segura
 ACCESS_TOKEN_MINUTES=30
 REFRESH_TOKEN_DAYS=7
-DATABASE_URL=sqlite:///./app.db
+DATABASE_URL=postgresql://usuario:password@host:port/dbname # Railway
 COOKIE_SECURE=true
 COOKIE_SAMESITE=lax
 ```
 
-## Producción (opción Docker)
 
-Construir imagen:
+## Producción (Railway + Render + Netlify)
 
-```bash
-docker build -t datam:prod .
-```
-
-Ejecutar contenedor:
-
-```bash
-docker run -d --name datam-prod -p 8000:8000 \
-  -e JWT_SECRET="cambia_esta_clave" \
-  -e ACCESS_TOKEN_MINUTES=30 \
-  -e REFRESH_TOKEN_DAYS=7 \
-  -e DATABASE_URL="sqlite:///./app.db" \
-  -e COOKIE_SECURE=true \
-  -e COOKIE_SAMESITE=lax \
-  datam:prod
-```
+1. Crea una base de datos PostgreSQL gratuita en Railway.
+2. Copia la cadena de conexión (DATABASE_URL) y configúrala en Render.
+3. Sube tu backend FastAPI a Render usando Dockerfile o Python.
+4. Configura las variables de entorno en Render (.env.prod.example como referencia).
+5. Despliega el frontend en Netlify y pon la URL del backend en API_BASE_URL.
+6. Listo: frontend y backend independientes, base de datos real y escalable.
 
 ## Producción (sin Docker)
 
