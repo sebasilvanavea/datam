@@ -1495,6 +1495,114 @@ def years(
     return [str(int(row[0])) for row in result if row[0] is not None]
 
 
+@app.get("/api/data/options")
+def data_options(
+    company_id: Optional[int] = Query(default=None),
+    vault_id: Optional[int] = Query(default=None),
+    category: Optional[str] = Query(default=None),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    company = resolve_company(user, db, company_id)
+    vault = resolve_vault(user, db, company, vault_id)
+
+    categories_rows = db.execute(
+        select(AccountingRecord.category)
+        .where(
+            AccountingRecord.owner_id == user.id,
+            AccountingRecord.company_id == company.id,
+            AccountingRecord.vault_id == vault.id,
+        )
+        .group_by(AccountingRecord.category)
+        .order_by(AccountingRecord.category.asc())
+    ).all()
+
+    subcategories_query = select(AccountingRecord.subcategory).where(
+        AccountingRecord.owner_id == user.id,
+        AccountingRecord.company_id == company.id,
+        AccountingRecord.vault_id == vault.id,
+    )
+    if category:
+        subcategories_query = subcategories_query.where(AccountingRecord.category == category)
+    subcategories_rows = db.execute(
+        subcategories_query.group_by(AccountingRecord.subcategory).order_by(AccountingRecord.subcategory.asc())
+    ).all()
+
+    projects_query = select(AccountingRecord.project).where(
+        AccountingRecord.owner_id == user.id,
+        AccountingRecord.company_id == company.id,
+        AccountingRecord.vault_id == vault.id,
+    )
+    if category:
+        projects_query = projects_query.where(AccountingRecord.category == category)
+    projects_rows = db.execute(
+        projects_query.group_by(AccountingRecord.project).order_by(AccountingRecord.project.asc())
+    ).all()
+
+    accounts_rows = db.execute(
+        select(AccountingRecord.account)
+        .where(
+            AccountingRecord.owner_id == user.id,
+            AccountingRecord.company_id == company.id,
+            AccountingRecord.vault_id == vault.id,
+        )
+        .group_by(AccountingRecord.account)
+        .order_by(AccountingRecord.account.asc())
+    ).all()
+
+    project_codes_rows = db.execute(
+        select(AccountingRecord.project_code)
+        .where(
+            AccountingRecord.owner_id == user.id,
+            AccountingRecord.company_id == company.id,
+            AccountingRecord.vault_id == vault.id,
+        )
+        .group_by(AccountingRecord.project_code)
+        .order_by(AccountingRecord.project_code.asc())
+    ).all()
+
+    years_rows = db.execute(
+        select(extract("year", AccountingRecord.date))
+        .where(
+            AccountingRecord.owner_id == user.id,
+            AccountingRecord.company_id == company.id,
+            AccountingRecord.vault_id == vault.id,
+        )
+        .group_by(extract("year", AccountingRecord.date))
+        .order_by(extract("year", AccountingRecord.date).desc())
+    ).all()
+
+    uploads_rows = db.scalars(
+        select(UploadBatch)
+        .where(UploadBatch.owner_id == user.id)
+        .where(UploadBatch.company_id == company.id)
+        .where(UploadBatch.vault_id == vault.id)
+        .order_by(UploadBatch.uploaded_at.desc())
+        .limit(100)
+    ).all()
+
+    return {
+        "categories": [row[0] for row in categories_rows if row[0]],
+        "subcategories": [row[0] for row in subcategories_rows if row[0]],
+        "projects": [row[0] for row in projects_rows if row[0]],
+        "accounts": [row[0] for row in accounts_rows if row[0]],
+        "project_codes": [row[0] for row in project_codes_rows if row[0]],
+        "years": [str(int(row[0])) for row in years_rows if row[0] is not None],
+        "uploads": [
+            {
+                "id": item.id,
+                "filename": item.original_filename,
+                "stored_path": item.stored_path,
+                "period": item.period_label,
+                "uploaded_at": item.uploaded_at.isoformat(),
+                "rows_inserted": item.records_inserted,
+                "duplicates_skipped": item.duplicates_skipped,
+            }
+            for item in uploads_rows
+        ],
+    }
+
+
 @app.get("/api/data/report")
 def detailed_report(
     company_id: Optional[int] = Query(default=None),

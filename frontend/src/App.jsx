@@ -429,6 +429,33 @@ function App() {
     setUploadsHistory(data)
   }
 
+  async function refreshDataOptions(categoryValue = '', companyId = activeCompanyId, vaultId = activeVaultId) {
+    if (!companyId || !vaultId) {
+      setCategories([])
+      setSubcategories([])
+      setProjects([])
+      setAccounts([])
+      setProjectCodes([])
+      setYears([])
+      setUploadsHistory([])
+      return
+    }
+
+    const query = new URLSearchParams()
+    query.set('company_id', String(companyId))
+    query.set('vault_id', String(vaultId))
+    if (categoryValue) query.set('category', categoryValue)
+
+    const data = await api(`/api/data/options?${query.toString()}`)
+    setCategories(data.categories || [])
+    setSubcategories(data.subcategories || [])
+    setProjects(data.projects || [])
+    setAccounts(data.accounts || [])
+    setProjectCodes(data.project_codes || [])
+    setYears(data.years || [])
+    setUploadsHistory(data.uploads || [])
+  }
+
   async function refreshVaults(companyId = activeCompanyId) {
     if (!companyId) {
       setVaults([])
@@ -830,15 +857,7 @@ function App() {
     const nextFilters = { ...filters, companyId: activeCompanyId, vaultId: activeVaultId }
     setFilters(nextFilters)
     ;(async () => {
-      await Promise.all([
-        refreshCategoryOptions(activeCompanyId),
-        refreshSubcategoryOptions('', activeCompanyId),
-        refreshProjectOptions('', activeCompanyId),
-        refreshAccountOptions(activeCompanyId),
-        refreshProjectCodeOptions(activeCompanyId),
-        refreshYears(activeCompanyId),
-        refreshUploadsHistory(activeCompanyId),
-      ])
+      await refreshDataOptions('', activeCompanyId, activeVaultId)
       await loadDashboard(nextFilters, 1)
     })()
   }, [activeCompanyId, activeVaultId])
