@@ -50,6 +50,15 @@ security = HTTPBearer(auto_error=False)
 login_attempts_by_ip: dict[str, list[datetime]] = {}
 
 
+def add_cors_headers(response: JSONResponse, request: Request) -> JSONResponse:
+    origin = request.headers.get("origin")
+    if origin and origin in CORS_ALLOW_ORIGINS:
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -192,7 +201,10 @@ async def set_security_headers(request: Request, call_next):
             csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
             csrf_header = request.headers.get(CSRF_HEADER_NAME)
             if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
-                return JSONResponse(status_code=403, content={"detail": "CSRF token inválido"})
+                return add_cors_headers(
+                    JSONResponse(status_code=403, content={"detail": "CSRF token inválido"}),
+                    request,
+                )
 
     response = await call_next(request)
     response.headers["X-Frame-Options"] = "DENY"
