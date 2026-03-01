@@ -27,7 +27,11 @@ import { Input } from './components/ui/input'
 const lightPalette = ['#2563eb', '#4f46e5', '#0d9488', '#d97706', '#9333ea', '#db2777']
 const darkPalette = ['#60a5fa', '#818cf8', '#2dd4bf', '#f59e0b', '#c084fc', '#f472b6']
 const DEFAULT_SORT_CONFIG = { field: 'fecha', direction: 'desc' }
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+const FALLBACK_PROD_API_URL = 'https://datam-backend.onrender.com'
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL
+  || (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app') ? FALLBACK_PROD_API_URL : '')
+).replace(/\/$/, '')
 
 function withApiBase(path) {
   if (!API_BASE_URL) return path
@@ -44,8 +48,23 @@ async function api(path, options = {}, retry = true) {
   }
 
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ detail: 'Error inesperado' }))
+    const payload = await response.json().catch(async () => {
+      const rawText = await response.text().catch(() => '')
+      if (rawText.startsWith('<!DOCTYPE') || rawText.startsWith('<html')) {
+        return { detail: 'La API devolvió HTML. Revisa VITE_API_BASE_URL en Netlify y CORS en Render.' }
+      }
+      return { detail: 'Error inesperado' }
+    })
     throw new Error(payload.detail || 'Error')
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  if (!contentType.includes('application/json')) {
+    const rawText = await response.text().catch(() => '')
+    if (rawText.startsWith('<!DOCTYPE') || rawText.startsWith('<html')) {
+      throw new Error('La API devolvió HTML en lugar de JSON. Verifica VITE_API_BASE_URL y CORS.')
+    }
+    throw new Error('Respuesta no JSON desde la API')
   }
 
   return response.json()
