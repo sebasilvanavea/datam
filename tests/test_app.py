@@ -18,6 +18,8 @@ def test_auth_and_data_flow():
 
     login = client.post("/api/auth/login", data={"username": "tester", "password": "supersecure123"})
     assert login.status_code == 200
+    csrf_token = client.cookies.get("csrf_token")
+    csrf_headers = {"x-csrf-token": csrf_token} if csrf_token else {}
 
     df = pd.DataFrame(
         [
@@ -46,6 +48,7 @@ def test_auth_and_data_flow():
     upload = client.post(
         "/api/data/upload",
         files={"file": ("test.xlsx", buffer.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        headers=csrf_headers,
     )
     assert upload.status_code == 200
 

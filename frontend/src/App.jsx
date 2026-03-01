@@ -39,8 +39,30 @@ function withApiBase(path) {
   return `${API_BASE_URL}${path}`
 }
 
+function getCookieValue(name) {
+  if (typeof document === 'undefined') return ''
+  const encodedName = `${encodeURIComponent(name)}=`
+  const parts = document.cookie.split(';')
+  for (const part of parts) {
+    const item = part.trim()
+    if (item.startsWith(encodedName)) {
+      return decodeURIComponent(item.slice(encodedName.length))
+    }
+  }
+  return ''
+}
+
 async function api(path, options = {}, retry = true) {
-  const response = await fetch(withApiBase(path), { credentials: 'include', ...options })
+  const method = (options.method || 'GET').toUpperCase()
+  const headers = new Headers(options.headers || {})
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    const csrfToken = getCookieValue('csrf_token')
+    if (csrfToken && !headers.has('x-csrf-token')) {
+      headers.set('x-csrf-token', csrfToken)
+    }
+  }
+
+  const response = await fetch(withApiBase(path), { credentials: 'include', ...options, headers })
 
   if (response.status === 401 && retry) {
     const refresh = await fetch(withApiBase('/api/auth/refresh'), { method: 'POST', credentials: 'include' })

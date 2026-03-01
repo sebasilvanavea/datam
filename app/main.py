@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import os
 import re
+import secrets
 import unicodedata
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -29,6 +30,15 @@ JWT_ALGORITHM = "HS256"
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
 COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "strict").lower()
 COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN")
+CSRF_COOKIE_NAME = "csrf_token"
+CSRF_HEADER_NAME = "x-csrf-token"
+CSRF_EXEMPT_PATHS = {
+    "/api/auth/register",
+    "/api/auth/login",
+    "/api/auth/refresh",
+}
+LOGIN_RATE_LIMIT_MAX_ATTEMPTS = int(os.getenv("LOGIN_RATE_LIMIT_MAX_ATTEMPTS", "10"))
+LOGIN_RATE_LIMIT_WINDOW_SECONDS = int(os.getenv("LOGIN_RATE_LIMIT_WINDOW_SECONDS", "300"))
 CORS_ALLOW_ORIGINS = [
     item.strip()
     for item in os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
@@ -37,6 +47,7 @@ CORS_ALLOW_ORIGINS = [
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer(auto_error=False)
+login_attempts_by_ip: dict[str, list[datetime]] = {}
 
 
 class Base(DeclarativeBase):
@@ -176,6 +187,13 @@ app.add_middleware(
 
 @app.middleware("http")
 async def set_security_headers(request: Request, call_next):
+    if request.url.path.startswith("/api/") and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
+        if request.url.path not in CSRF_EXEMPT_PATHS:
+            csrf_cookie = request.cookies.get(CSRF_COOKIE_NAME)
+            csrf_header = request.headers.get(CSRF_HEADER_NAME)
+            if not csrf_cookie or not csrf_header or not secrets.compare_digest(csrf_cookie, csrf_header):
+                return JSONResponse(status_code=403, content={"detail": "CSRF token inválido"})
+
     response = await call_next(request)
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -466,6 +484,7 @@ def build_record_fingerprint(
 def set_auth_cookies(response: JSONResponse, username: str) -> None:
     access = create_token(username, "access", timedelta(minutes=ACCESS_TOKEN_MINUTES))
     refresh = create_token(username, "refresh", timedelta(days=REFRESH_TOKEN_DAYS))
+    csrf_token = secrets.token_urlsafe(32)
     response.set_cookie(
         "access_token",
         access,
@@ -484,11 +503,45 @@ def set_auth_cookies(response: JSONResponse, username: str) -> None:
         domain=COOKIE_DOMAIN,
         max_age=REFRESH_TOKEN_DAYS * 24 * 3600,
     )
+    response.set_cookie(
+        CSRF_COOKIE_NAME,
+        csrf_token,
+        httponly=False,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        domain=COOKIE_DOMAIN,
+        max_age=REFRESH_TOKEN_DAYS * 24 * 3600,
+    )
 
 
 def clear_auth_cookies(response: JSONResponse) -> None:
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
+    response.delete_cookie(CSRF_COOKIE_NAME)
+
+
+def get_client_ip(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def is_rate_limited(ip_address: str, now: datetime) -> bool:
+    window_start = now - timedelta(seconds=LOGIN_RATE_LIMIT_WINDOW_SECONDS)
+    attempts = [timestamp for timestamp in login_attempts_by_ip.get(ip_address, []) if timestamp >= window_start]
+    login_attempts_by_ip[ip_address] = attempts
+    return len(attempts) >= LOGIN_RATE_LIMIT_MAX_ATTEMPTS
+
+
+def register_failed_attempt(ip_address: str, now: datetime) -> None:
+    attempts = login_attempts_by_ip.get(ip_address, [])
+    attempts.append(now)
+    login_attempts_by_ip[ip_address] = attempts
+
+
+def clear_failed_attempts(ip_address: str) -> None:
+    login_attempts_by_ip.pop(ip_address, None)
 
 
 @app.get("/")
@@ -521,13 +574,20 @@ def register(
 
 
 @app.post("/api/auth/login")
-def login(username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+def login(request: Request, username: str = Form(...), password: str = Form(...), db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc)
+    ip_address = get_client_ip(request)
+    if is_rate_limited(ip_address, now):
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Intenta nuevamente en unos minutos")
     if len(password.encode("utf-8")) > 72:
+        register_failed_attempt(ip_address, now)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     user = db.scalar(select(User).where(User.username == username.lower()))
     if not user or not verify_password(password, user.password_hash):
+        register_failed_attempt(ip_address, now)
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     response = JSONResponse({"message": "Login exitoso", "full_name": user.full_name})
+    clear_failed_attempts(ip_address)
     set_auth_cookies(response, user.username)
     return response
 
