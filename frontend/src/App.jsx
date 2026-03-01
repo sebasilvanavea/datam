@@ -27,7 +27,7 @@ import { Input } from './components/ui/input'
 const lightPalette = ['#2563eb', '#4f46e5', '#0d9488', '#d97706', '#9333ea', '#db2777']
 const darkPalette = ['#60a5fa', '#818cf8', '#2dd4bf', '#f59e0b', '#c084fc', '#f472b6']
 const DEFAULT_SORT_CONFIG = { field: 'fecha', direction: 'desc' }
-const FALLBACK_PROD_API_URL = 'https://datam-backend.onrender.com'
+const FALLBACK_PROD_API_URL = 'https://datam-backend-production.up.railway.app'
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL
   || (typeof window !== 'undefined' && window.location.hostname.includes('netlify.app') ? FALLBACK_PROD_API_URL : '')
@@ -51,7 +51,7 @@ async function api(path, options = {}, retry = true) {
     const payload = await response.json().catch(async () => {
       const rawText = await response.text().catch(() => '')
       if (rawText.startsWith('<!DOCTYPE') || rawText.startsWith('<html')) {
-        return { detail: 'La API devolvió HTML. Revisa VITE_API_BASE_URL en Netlify y CORS en Render.' }
+        return { detail: 'La API devolvió HTML. Revisa VITE_API_BASE_URL en Netlify y CORS en Railway.' }
       }
       return { detail: 'Error inesperado' }
     })
